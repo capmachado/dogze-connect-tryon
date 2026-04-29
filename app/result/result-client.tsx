@@ -6,6 +6,7 @@ export default function ResultClient() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [debug, setDebug] = useState<any>(null);
 
   useEffect(() => {
     const savedPhoto = sessionStorage.getItem("dogze_pet_photo");
@@ -19,6 +20,8 @@ export default function ResultClient() {
     if (!photo) return;
 
     setLoading(true);
+    setGenerated(null);
+    setDebug(null);
 
     try {
       const res = await fetch("/api/tryon", {
@@ -34,19 +37,24 @@ export default function ResultClient() {
 
       const data = await res.json();
 
+      // 👇 MOSTRA no console
+      console.log("RESPOSTA IA:", data);
+
+      // 👇 MOSTRA na tela
+      setDebug(data);
+
       if (!res.ok || data?.error) {
         alert(data?.error || "Erro ao gerar imagem com IA.");
         setLoading(false);
         return;
       }
 
-      // 🔥 Aqui está a correção principal
       const imageUrl =
         data?.imageUrl ||
         (Array.isArray(data?.output) ? data.output[0] : data?.output);
 
       if (!imageUrl) {
-        alert("A IA não retornou imagem ainda. Tente novamente.");
+        alert("A IA não retornou imagem ainda.");
         setLoading(false);
         return;
       }
@@ -66,7 +74,7 @@ export default function ResultClient() {
       </h1>
 
       <div className="mt-6 space-y-5">
-        {/* Foto original */}
+        {/* FOTO ORIGINAL */}
         {photo && (
           <img
             src={photo}
@@ -75,7 +83,7 @@ export default function ResultClient() {
           />
         )}
 
-        {/* Botão */}
+        {/* BOTÃO */}
         <button
           onClick={generateAI}
           disabled={!photo || loading}
@@ -84,18 +92,28 @@ export default function ResultClient() {
           {loading ? "Gerando..." : "Gerar com IA"}
         </button>
 
-        {/* Resultado IA */}
+        {/* RESULTADO */}
         {generated && (
           <div className="space-y-3">
             <p className="text-sm text-dogze-muted">
-              Resultado gerado pela IA:
+              Resultado da IA:
             </p>
 
             <img
               src={generated}
-              alt="Resultado gerado por IA"
+              alt="Resultado IA"
               className="w-full rounded-3xl border border-dogze-orange/40"
             />
+          </div>
+        )}
+
+        {/* DEBUG (ESSENCIAL AGORA) */}
+        {debug && (
+          <div className="mt-5 rounded-xl bg-black/40 p-3 text-xs text-green-400">
+            <p className="mb-2 font-bold">DEBUG IA:</p>
+            <pre className="whitespace-pre-wrap">
+              {JSON.stringify(debug, null, 2)}
+            </pre>
           </div>
         )}
       </div>
