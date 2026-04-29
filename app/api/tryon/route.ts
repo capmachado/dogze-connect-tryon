@@ -5,9 +5,6 @@ type ReplicatePrediction = {
   status?: string;
   output?: string | string[] | null;
   error?: string | null;
-  urls?: {
-    get?: string;
-  };
 };
 
 function getOutputUrl(output: ReplicatePrediction["output"]) {
@@ -23,28 +20,24 @@ export async function POST(req: Request) {
 
     if (!token) {
       return NextResponse.json(
-        { error: "REPLICATE_API_TOKEN não configurado na Vercel." },
+        { error: "Token Replicate não configurado." },
         { status: 500 }
       );
     }
 
-    const { image, productName } = await req.json();
-
-    if (!image) {
-      return NextResponse.json(
-        { error: "Imagem do pet não recebida." },
-        { status: 400 }
-      );
-    }
+    const { image, productImage } = await req.json();
 
     const prompt = `
-      Edit this pet photo naturally.
-      Keep the same dog, same pose, same background and same lighting.
-      Add a premium DOGZE pet accessory to the dog.
-      Product: ${productName || "dog collar or harness"}.
-      The accessory must look realistic, correctly positioned on the dog's neck or chest.
-      Do not change the dog's face. Do not add text. Do not add extra animals.
-    `;
+Use the EXACT product from the reference image.
+
+- Do NOT invent a new collar
+- Copy colors, texture and shape from the product image
+- Place it naturally on the dog's neck
+- Keep lighting and realism consistent
+- Do not change the dog
+
+Product reference image is provided.
+`;
 
     const response = await fetch(
       "https://api.replicate.com/v1/models/black-forest-labs/flux-kontext-pro/predictions",
@@ -59,9 +52,9 @@ export async function POST(req: Request) {
           input: {
             input_image: image,
             prompt,
-            aspect_ratio: "match_input_image",
-            output_format: "png",
-            safety_tolerance: 2,
+            // 👇 IMPORTANTE
+            // concatenamos imagens no prompt (hack simples)
+            image_prompt: productImage,
           },
         }),
       }
@@ -69,53 +62,26 @@ export async function POST(req: Request) {
 
     const prediction = (await response.json()) as ReplicatePrediction;
 
-    if (!response.ok) {
+    if (!response.ok || prediction.error) {
       return NextResponse.json(
-        {
-          error:
-            prediction?.error ||
-            "Erro ao chamar a Replicate. Verifique token, crédito e modelo.",
-          raw: prediction,
-        },
-        { status: response.status }
-      );
-    }
-
-    if (prediction.error) {
-      return NextResponse.json(
-        { error: prediction.error, raw: prediction },
+        { error: prediction.error || "Erro IA" },
         { status: 500 }
       );
     }
 
-    const outputUrl = getOutputUrl(prediction.output);
+    const imageUrl = getOutputUrl(prediction.output);
 
-    if (!outputUrl) {
+    if (!imageUrl) {
       return NextResponse.json(
-        {
-          error:
-            "A IA ainda não terminou a imagem. Tente novamente em alguns segundos.",
-          status: prediction.status,
-          predictionId: prediction.id,
-          raw: prediction,
-        },
+        { error: "IA não retornou imagem ainda." },
         { status: 202 }
       );
     }
 
-    return NextResponse.json({
-      imageUrl: outputUrl,
-      status: prediction.status,
-      predictionId: prediction.id,
-    });
-  } catch (error) {
+    return NextResponse.json({ imageUrl });
+  } catch (e) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Erro inesperado ao gerar imagem.",
-      },
+      { error: "Erro inesperado" },
       { status: 500 }
     );
   }
