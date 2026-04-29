@@ -20,20 +20,42 @@ export default function ResultClient() {
 
     setLoading(true);
 
-    const res = await fetch("/api/tryon", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        image: photo,
-        prompt: "dog wearing a premium dog collar, realistic",
-      }),
-    });
+    try {
+      const res = await fetch("/api/tryon", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image: photo,
+          productName: "coleira premium dogze",
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    setGenerated(data?.output?.[0] || null);
+      if (!res.ok || data?.error) {
+        alert(data?.error || "Erro ao gerar imagem com IA.");
+        setLoading(false);
+        return;
+      }
+
+      // 🔥 Aqui está a correção principal
+      const imageUrl =
+        data?.imageUrl ||
+        (Array.isArray(data?.output) ? data.output[0] : data?.output);
+
+      if (!imageUrl) {
+        alert("A IA não retornou imagem ainda. Tente novamente.");
+        setLoading(false);
+        return;
+      }
+
+      setGenerated(imageUrl);
+    } catch (error) {
+      alert("Erro inesperado ao chamar IA.");
+    }
+
     setLoading(false);
   }
 
@@ -44,6 +66,7 @@ export default function ResultClient() {
       </h1>
 
       <div className="mt-6 space-y-5">
+        {/* Foto original */}
         {photo && (
           <img
             src={photo}
@@ -52,6 +75,7 @@ export default function ResultClient() {
           />
         )}
 
+        {/* Botão */}
         <button
           onClick={generateAI}
           disabled={!photo || loading}
@@ -60,12 +84,19 @@ export default function ResultClient() {
           {loading ? "Gerando..." : "Gerar com IA"}
         </button>
 
+        {/* Resultado IA */}
         {generated && (
-          <img
-            src={generated}
-            alt="Resultado gerado por IA"
-            className="w-full rounded-3xl border border-dogze-orange/40"
-          />
+          <div className="space-y-3">
+            <p className="text-sm text-dogze-muted">
+              Resultado gerado pela IA:
+            </p>
+
+            <img
+              src={generated}
+              alt="Resultado gerado por IA"
+              className="w-full rounded-3xl border border-dogze-orange/40"
+            />
+          </div>
         )}
       </div>
     </main>
