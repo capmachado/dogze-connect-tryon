@@ -9,7 +9,10 @@ export default function ResultClient() {
 
   useEffect(() => {
     const savedPhoto = sessionStorage.getItem("dogze_pet_photo");
-    if (savedPhoto) setPhoto(savedPhoto);
+
+    if (savedPhoto) {
+      setPhoto(savedPhoto);
+    }
   }, []);
 
   async function generateAI() {
