@@ -28,7 +28,7 @@ export default function ResultClient() {
 
           // 👇 PRODUTO REAL (trocar depois dinamicamente)
           productImage:
-            "https://cdn.shopify.com/s/files/1/0000/0000/products/exemplo.png",
+            "https://cdn.shopify.com/s/files/1/0729/0303/3030/files/Peitoral_zoio_teste_430x.png?v=1777485461",
         }),
       });
 
