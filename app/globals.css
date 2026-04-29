@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --dogze-bg: #1a1a1a; --dogze-orange: #C85A0E; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; background: var(--dogze-bg); color: #fff; }
+body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
+button, input, textarea, select { font: inherit; }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.dogze-title {
+  font-family: "Arial Narrow", "Roboto Condensed", "Oswald", Arial, sans-serif;
+  letter-spacing: 0.015em;
+  font-stretch: condensed;
+  font-weight: 600;
+}
+.dogze-glow { box-shadow: 0 0 0 1px rgba(200,90,14,.34), 0 18px 50px rgba(0,0,0,.42); }
