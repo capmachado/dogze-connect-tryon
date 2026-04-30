@@ -19,7 +19,7 @@ export const dogzeProducts: DogzeProduct[] = [
     handle: "coleira-peitoral-anti-puxao-easy-walk-para-cao-cachorro-melancia",
     price: "R$ 89,90",
     image:
-      "https://dogze-pet.myshopify.com/cdn/shop/files/Peitoral_anti-puxao_Zoio_640_x_640_px.png?v=1776364347",
+      "https://dogze-pet.myshopify.com/cdn/shop/files/zeedog_antipuxao.png.png?v=1776364347",
     description: "Mais controle, conforto e segurança para o passeio.",
     sizes: ["P", "M", "G", "GG"],
   },
