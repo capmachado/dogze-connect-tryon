@@ -15,27 +15,27 @@ type TryOnTemplate = {
 
 const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
   peitoral: {
-    widthRatio: 0.18,
-    leftRatio: 0.44,
-    topRatio: 0.43,
-    rotation: 4,
+    widthRatio: 0.28, // 🔥 maior
+    leftRatio: 0.50,  // 🔥 mais centralizado
+    topRatio: 0.48,   // 🔥 mais baixo (peito)
+    rotation: 6,
   },
   coleira: {
-    widthRatio: 0.16,
-    leftRatio: 0.48,
-    topRatio: 0.34,
+    widthRatio: 0.18,
+    leftRatio: 0.50,
+    topRatio: 0.30,
     rotation: 0,
   },
   guia: {
-    widthRatio: 0.26,
-    leftRatio: 0.34,
-    topRatio: 0.42,
+    widthRatio: 0.30,
+    leftRatio: 0.40,
+    topRatio: 0.50,
     rotation: -8,
   },
   combo: {
-    widthRatio: 0.2,
-    leftRatio: 0.42,
-    topRatio: 0.42,
+    widthRatio: 0.25,
+    leftRatio: 0.45,
+    topRatio: 0.45,
     rotation: 2,
   },
 };
@@ -55,13 +55,10 @@ function getTemplate(productType?: ProductType) {
 
 async function loadImage(url: string) {
   const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Erro ao baixar produto: ${res.status}`);
-  }
+  if (!res.ok) throw new Error("Erro ao baixar produto");
   return Buffer.from(await res.arrayBuffer());
 }
 
-// 🔥 REMOVE FUNDO SEM CRIAR PRETO
 async function removeBackground(buffer: Buffer) {
   const { data, info } = await sharp(buffer)
     .ensureAlpha()
@@ -78,7 +75,7 @@ async function removeBackground(buffer: Buffer) {
     const brightness = (r + g + b) / 3;
 
     if (brightness > 235) {
-      pixels[i + 3] = 0; // transparente
+      pixels[i + 3] = 0;
     }
   }
 
@@ -89,6 +86,7 @@ async function removeBackground(buffer: Buffer) {
       channels: info.channels,
     },
   })
+    .trim()
     .png()
     .toBuffer();
 }
@@ -107,9 +105,9 @@ export async function POST(req: Request) {
 
     const template = getTemplate(productType);
 
-    const cleanedProduct = await removeBackground(productBuffer);
+    const cleaned = await removeBackground(productBuffer);
 
-    const resized = await sharp(cleanedProduct)
+    const resized = await sharp(cleaned)
       .resize({ width: Math.round(petMeta.width * template.widthRatio) })
       .rotate(template.rotation, {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -117,7 +115,7 @@ export async function POST(req: Request) {
       .png()
       .toBuffer();
 
-    const left = Math.round(petMeta.width * template.leftRatio);
+    const left = Math.round(petMeta.width * template.leftRatio - resized.length * 0.0005);
     const top = Math.round(petMeta.height * template.topRatio);
 
     const final = await sharp(petBuffer)
@@ -136,9 +134,8 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     console.error(err);
-
     return NextResponse.json(
-      { error: "Erro composição V2.3.2" },
+      { error: "Erro composição V2.3.3" },
       { status: 500 }
     );
   }
