@@ -34,11 +34,17 @@ export async function POST(req: Request) {
 
     const petBuffer = base64ToBuffer(image);
 
-    const productRes = await fetch(productImage, {
-      headers: {
-        "User-Agent": "DogzeConnectTryOn/1.0",
-      },
-    });
+  const origin = new URL(req.url).origin;
+
+const productImageUrl = productImage.startsWith("http")
+  ? productImage
+  : `${origin}${productImage}`;
+
+const productRes = await fetch(productImageUrl, {
+  headers: {
+    "User-Agent": "DogzeConnectTryOn/1.0",
+  },
+});
 
     if (!productRes.ok) {
       return NextResponse.json(
