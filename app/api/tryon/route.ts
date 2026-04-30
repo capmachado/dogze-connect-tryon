@@ -1,91 +1,59 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
-import fs from "fs/promises";
-import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function base64ToBuffer(dataUrl: string) {
   const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-
-  if (!match) {
-    throw new Error("A imagem do pet não está em formato base64 válido.");
-  }
-
+  if (!match) throw new Error("Imagem inválida");
   return Buffer.from(match[1], "base64");
-}
-
-async function loadProductImage(productImage: string) {
-  if (productImage.startsWith("/")) {
-    const cleanPath = productImage.replace(/^\/+/, "");
-    const filePath = path.join(process.cwd(), "public", cleanPath);
-    return await fs.readFile(filePath);
-  }
-
-  const productRes = await fetch(productImage, {
-    headers: {
-      "User-Agent": "DogzeConnectTryOn/1.0",
-    },
-  });
-
-  if (!productRes.ok) {
-    throw new Error(
-      `Não consegui baixar a imagem do produto. Status: ${productRes.status}`
-    );
-  }
-
-  return Buffer.from(await productRes.arrayBuffer());
 }
 
 export async function POST(req: Request) {
   try {
     const { image, productImage } = await req.json();
 
-    if (!image) {
-      return NextResponse.json(
-        { error: "Imagem do pet ausente." },
-        { status: 400 }
-      );
-    }
-
-    if (!productImage) {
-      return NextResponse.json(
-        { error: "Imagem do produto ausente." },
-        { status: 400 }
-      );
-    }
-
     const petBuffer = base64ToBuffer(image);
-    const productBuffer = await loadProductImage(productImage);
 
-    const petMeta = await sharp(petBuffer).rotate().metadata();
+    const productRes = await fetch(productImage);
+    const productBuffer = Buffer.from(await productRes.arrayBuffer());
+
+    // 🔥 REMOVE FUNDO BRANCO
+    const harness = await sharp(productBuffer)
+      .removeAlpha() // garante canal
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .toColourspace("rgb")
+      .threshold(250) // tenta separar branco
+      .negate()
+      .png()
+      .toBuffer();
+
+    const petMeta = await sharp(petBuffer).metadata();
 
     if (!petMeta.width || !petMeta.height) {
-      return NextResponse.json(
-        { error: "Não consegui ler as dimensões da foto do pet." },
-        { status: 400 }
-      );
+      throw new Error("Erro dimensões");
     }
 
     const petWidth = petMeta.width;
     const petHeight = petMeta.height;
 
-    const harnessWidth = Math.round(petWidth * 0.32);
+    // 🔥 ESCALA MELHOR
+    const harnessWidth = Math.round(petWidth * 0.25);
 
-    const harness = await sharp(productBuffer)
+    const resizedHarness = await sharp(productBuffer)
       .resize({ width: harnessWidth })
       .png()
       .toBuffer();
 
-    const left = Math.round(petWidth * 0.48);
-    const top = Math.round(petHeight * 0.38);
+    // 🔥 POSIÇÃO PEITO
+    const left = Math.round(petWidth * 0.55);
+    const top = Math.round(petHeight * 0.55);
 
     const finalImage = await sharp(petBuffer)
-      .rotate()
       .composite([
         {
-          input: harness,
+          input: resizedHarness,
           left,
           top,
         },
@@ -96,16 +64,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       imageUrl: `data:image/png;base64,${finalImage.toString("base64")}`,
     });
-  } catch (error) {
-    console.error("ERRO TRYON V2:", error);
-
+  } catch (err) {
+    console.error(err);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Erro ao gerar composição V2.",
-      },
+      { error: "Erro composição V2.1" },
       { status: 500 }
     );
   }
