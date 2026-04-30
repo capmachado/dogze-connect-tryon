@@ -18,9 +18,10 @@ export const dogzeProducts: DogzeProduct[] = [
     type: "peitoral",
     handle: "coleira-peitoral-anti-puxao-easy-walk-para-cao-cachorro-melancia",
     price: "R$ 89,90",
-    image: "/products/easy-walk-melancia.svg",
+    image:
+      "https://dogze-pet.myshopify.com/cdn/shop/files/Peitoral_anti-puxao_Zoio_640_x_640_px.png?v=1776364347",
     description: "Mais controle, conforto e segurança para o passeio.",
-    sizes: ["P", "M", "G", "GG"]
+    sizes: ["P", "M", "G", "GG"],
   },
   {
     id: "guia-premium-melancia",
@@ -28,10 +29,11 @@ export const dogzeProducts: DogzeProduct[] = [
     type: "guia",
     handle: "guia-premium-dogze-para-cao-cachorro-melancia",
     price: "R$ 59,90",
-    image: "/products/guia-premium-melancia.svg",
+    image:
+      "https://dogze-pet.myshopify.com/cdn/shop/files/zeedog_antipuxao.png?v=1776364347",
     description: "Guia premium para combinar com o visual do pet.",
-    sizes: ["Único"]
-  }
+    sizes: ["Único"],
+  },
 ];
 
 export function getShopifyProductUrl(handle: string) {
@@ -40,18 +42,24 @@ export function getShopifyProductUrl(handle: string) {
 
 export function getProductByHandle(handle?: string | null) {
   if (!handle) return dogzeProducts[0];
-  return dogzeProducts.find((product) => product.handle === handle) ?? dogzeProducts[0];
+  return (
+    dogzeProducts.find((product) => product.handle === handle) ??
+    dogzeProducts[0]
+  );
 }
 
-export function createProductFromSearchParams(params: URLSearchParams): DogzeProduct {
+export function createProductFromSearchParams(
+  params: URLSearchParams
+): DogzeProduct {
   const handle = params.get("handle");
   const base = getProductByHandle(handle);
+
   return {
     ...base,
     name: params.get("name") || base.name,
     handle: handle || base.handle,
     price: params.get("price") || base.price,
     image: params.get("image") || base.image,
-    description: params.get("description") || base.description
+    description: params.get("description") || base.description,
   };
 }
