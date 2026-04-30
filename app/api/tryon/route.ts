@@ -21,7 +21,7 @@ const PRODUCT_TEMPLATES: Record<string, TryOnTemplate> = {
     leftRatio: 0.44,
     topRatio: 0.43,
     rotation: 4,
-    whiteThreshold: 238,
+    whiteThreshold: 200,
     shadow: true,
   },
 };
@@ -32,7 +32,7 @@ const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
     leftRatio: 0.44,
     topRatio: 0.43,
     rotation: 4,
-    whiteThreshold: 238,
+    whiteThreshold: 200,
     shadow: true,
   },
   coleira: {
@@ -40,7 +40,7 @@ const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
     leftRatio: 0.48,
     topRatio: 0.34,
     rotation: 0,
-    whiteThreshold: 238,
+    whiteThreshold: 200,
     shadow: true,
   },
   guia: {
@@ -48,7 +48,7 @@ const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
     leftRatio: 0.34,
     topRatio: 0.42,
     rotation: -8,
-    whiteThreshold: 238,
+    whiteThreshold: 200,
     shadow: true,
   },
   combo: {
@@ -56,7 +56,7 @@ const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
     leftRatio: 0.42,
     topRatio: 0.42,
     rotation: 2,
-    whiteThreshold: 238,
+    whiteThreshold: 200,
     shadow: true,
   },
 };
@@ -99,6 +99,7 @@ async function loadImageFromUrl(url: string) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+// 🔥 FUNÇÃO CORRIGIDA (remove fundo branco + cinza)
 async function removeWhiteBackground(buffer: Buffer, threshold: number) {
   const { data, info } = await sharp(buffer)
     .ensureAlpha()
@@ -112,9 +113,14 @@ async function removeWhiteBackground(buffer: Buffer, threshold: number) {
     const g = pixels[i + 1];
     const b = pixels[i + 2];
 
-    const isNearWhite = r >= threshold && g >= threshold && b >= threshold;
+    const brightness = (r + g + b) / 3;
 
-    if (isNearWhite) {
+    const isBackground =
+      brightness > threshold ||
+      (r > 200 && g > 200 && b > 200) ||
+      (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && brightness > 180);
+
+    if (isBackground) {
       pixels[i + 3] = 0;
     }
   }
