@@ -1,98 +1,70 @@
 import { NextResponse } from "next/server";
-
-type ReplicatePrediction = {
-  output?: string | string[] | null;
-  error?: string | null;
-};
-
-function getOutputUrl(output: ReplicatePrediction["output"]) {
-  if (!output) return null;
-  if (typeof output === "string") return output;
-  if (Array.isArray(output)) return output[0] ?? null;
-  return null;
-}
+import sharp from "sharp";
 
 export async function POST(req: Request) {
   try {
-    const token = process.env.REPLICATE_API_TOKEN;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Token Replicate não configurado." },
-        { status: 500 }
-      );
-    }
-
     const { image, productImage } = await req.json();
 
-const prompt = `
-You must place the EXACT product from the reference image onto the dog.
+    if (!image || !productImage) {
+      return NextResponse.json(
+        { error: "Imagem do pet ou produto ausente" },
+        { status: 400 }
+      );
+    }
 
-STRICT RULES (DO NOT BREAK):
-- Do NOT design or invent a new harness
-- Do NOT change color, material, shape or structure
-- Copy the harness EXACTLY as it appears in the reference image
-- All straps, buckles and connectors must match the product image
+    // 🔹 Converter base64 do pet
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    const petBuffer = Buffer.from(base64Data, "base64");
 
-PLACEMENT:
-- This is a NO-PULL HARNESS
-- Place the horizontal strap across the dog's CHEST (not neck)
-- The harness must form a realistic Y-shape on the chest
-- The front leash ring must be centered on the chest
+    // 🔹 Baixar imagem do produto
+    const productRes = await fetch(productImage);
+    const productArrayBuffer = await productRes.arrayBuffer();
+    const productBuffer = Buffer.from(productArrayBuffer);
 
-REALISM:
-- Keep the dog unchanged
-- Match perspective and body curvature
-- Apply natural shadows and lighting
+    // 🔹 Ler dimensões do pet
+    const petMeta = await sharp(petBuffer).metadata();
 
-IMPORTANT:
-If the product cannot be applied correctly, DO NOT modify it.
-It must remain identical to the reference image.
+    if (!petMeta.width || !petMeta.height) {
+      throw new Error("Não foi possível ler dimensões do pet");
+    }
 
-Goal: perfect product fidelity + realistic try-on
-`;
+    const petWidth = petMeta.width;
+    const petHeight = petMeta.height;
 
-    const response = await fetch(
-      "https://api.replicate.com/v1/models/black-forest-labs/flux-kontext-pro/predictions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Prefer: "wait=60",
+    // 🔥 POSICIONAMENTO INICIAL (ajustável)
+    const harnessWidth = Math.round(petWidth * 0.35);
+
+    const harness = await sharp(productBuffer)
+      .resize({ width: harnessWidth })
+      .png()
+      .toBuffer();
+
+    // 🔥 POSIÇÃO (centro do peito aproximado)
+    const left = Math.round(petWidth * 0.45);
+    const top = Math.round(petHeight * 0.45);
+
+    // 🔥 COMPOSIÇÃO FINAL
+    const finalImage = await sharp(petBuffer)
+      .composite([
+        {
+          input: harness,
+          top,
+          left,
         },
-        body: JSON.stringify({
-          input: {
-            input_image: image,
-            prompt,
-            image_prompt: productImage,
-          },
-        }),
-      }
-    );
+      ])
+      .png()
+      .toBuffer();
 
-    const prediction = (await response.json()) as ReplicatePrediction;
+    const base64 = finalImage.toString("base64");
 
-    if (!response.ok || prediction.error) {
-      return NextResponse.json(
-        { error: prediction.error || "Erro IA" },
-        { status: 500 }
-      );
-    }
+    return NextResponse.json({
+      imageUrl: `data:image/png;base64,${base64}`,
+    });
+  } catch (err) {
+    console.error(err);
 
-    const imageUrl = getOutputUrl(prediction.output);
-
-    if (!imageUrl) {
-      return NextResponse.json(
-        { error: "IA não retornou imagem ainda." },
-        { status: 202 }
-      );
-    }
-
-    return NextResponse.json({ imageUrl });
-  } catch {
     return NextResponse.json(
-      { error: "Erro inesperado" },
+      { error: "Erro ao gerar composição V2" },
       { status: 500 }
     );
   }
