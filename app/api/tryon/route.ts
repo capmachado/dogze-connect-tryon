@@ -25,28 +25,31 @@ export async function POST(req: Request) {
 
     const { image, productImage } = await req.json();
 
-    const prompt = `
-Apply the EXACT harness from the product image onto the dog.
+const prompt = `
+You must place the EXACT product from the reference image onto the dog.
 
-CRITICAL RULES:
-- Do NOT create a new harness
-- Use ONLY the product reference image
-- Keep exact colors, straps, shape and structure
+STRICT RULES (DO NOT BREAK):
+- Do NOT design or invent a new harness
+- Do NOT change color, material, shape or structure
+- Copy the harness EXACTLY as it appears in the reference image
+- All straps, buckles and connectors must match the product image
 
-PLACEMENT RULES:
-- This is a NO-PULL HARNESS (not a neck collar)
-- Position the front strap horizontally across the dog's CHEST
-- The harness must form a "Y" shape on the chest
-- The leash attachment point must be on the FRONT chest area
-- Do NOT place it on the neck
+PLACEMENT:
+- This is a NO-PULL HARNESS
+- Place the horizontal strap across the dog's CHEST (not neck)
+- The harness must form a realistic Y-shape on the chest
+- The front leash ring must be centered on the chest
 
 REALISM:
-- Follow the dog's body anatomy
-- Adjust perspective to match the dog
-- Apply natural lighting and shadows
 - Keep the dog unchanged
+- Match perspective and body curvature
+- Apply natural shadows and lighting
 
-Goal: realistic product try-on preview
+IMPORTANT:
+If the product cannot be applied correctly, DO NOT modify it.
+It must remain identical to the reference image.
+
+Goal: perfect product fidelity + realistic try-on
 `;
 
     const response = await fetch(
