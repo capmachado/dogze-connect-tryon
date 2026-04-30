@@ -2,18 +2,26 @@
 
 import { useEffect, useState } from "react";
 
+type Product = {
+  image: string;
+};
+
 export default function ResultClient() {
   const [photo, setPhoto] = useState<string | null>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const savedPhoto = sessionStorage.getItem("dogze_pet_photo");
+    const savedProduct = sessionStorage.getItem("dogze_product");
+
     if (savedPhoto) setPhoto(savedPhoto);
+    if (savedProduct) setProduct(JSON.parse(savedProduct));
   }, []);
 
   async function generateAI() {
-    if (!photo) return;
+    if (!photo || !product) return;
 
     setLoading(true);
 
@@ -25,10 +33,7 @@ export default function ResultClient() {
         },
         body: JSON.stringify({
           image: photo,
-
-          // 👇 PRODUTO REAL (trocar depois dinamicamente)
-          productImage:
-            "https://cdn.shopify.com/s/files/1/0729/0303/3030/files/Peitoral_zoio_teste_430x.png?v=1777485461",
+          productImage: product.image, // 🔥 agora dinâmico
         }),
       });
 
@@ -49,10 +54,13 @@ export default function ResultClient() {
   }
 
   return (
-    <main className="p-5 text-white">
+    <main className="p-5 text-white space-y-4">
       {photo && <img src={photo} />}
 
-      <button onClick={generateAI}>
+      <button
+        onClick={generateAI}
+        className="bg-orange-500 px-4 py-2 rounded"
+      >
         {loading ? "Gerando..." : "Gerar com IA"}
       </button>
 

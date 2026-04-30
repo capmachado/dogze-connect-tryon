@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
 type ReplicatePrediction = {
-  id?: string;
-  status?: string;
   output?: string | string[] | null;
   error?: string | null;
 };
@@ -28,15 +26,27 @@ export async function POST(req: Request) {
     const { image, productImage } = await req.json();
 
     const prompt = `
-Use the EXACT product from the reference image.
+Apply the EXACT harness from the product image onto the dog.
 
-- Do NOT invent a new collar
-- Copy colors, texture and shape from the product image
-- Place it naturally on the dog's neck
-- Keep lighting and realism consistent
-- Do not change the dog
+CRITICAL RULES:
+- Do NOT create a new harness
+- Use ONLY the product reference image
+- Keep exact colors, straps, shape and structure
 
-Product reference image is provided.
+PLACEMENT RULES:
+- This is a NO-PULL HARNESS (not a neck collar)
+- Position the front strap horizontally across the dog's CHEST
+- The harness must form a "Y" shape on the chest
+- The leash attachment point must be on the FRONT chest area
+- Do NOT place it on the neck
+
+REALISM:
+- Follow the dog's body anatomy
+- Adjust perspective to match the dog
+- Apply natural lighting and shadows
+- Keep the dog unchanged
+
+Goal: realistic product try-on preview
 `;
 
     const response = await fetch(
@@ -52,8 +62,6 @@ Product reference image is provided.
           input: {
             input_image: image,
             prompt,
-            // 👇 IMPORTANTE
-            // concatenamos imagens no prompt (hack simples)
             image_prompt: productImage,
           },
         }),
@@ -79,7 +87,7 @@ Product reference image is provided.
     }
 
     return NextResponse.json({ imageUrl });
-  } catch (e) {
+  } catch {
     return NextResponse.json(
       { error: "Erro inesperado" },
       { status: 500 }
