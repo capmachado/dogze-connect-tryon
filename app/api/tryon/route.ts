@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +14,28 @@ function base64ToBuffer(dataUrl: string) {
   }
 
   return Buffer.from(match[1], "base64");
+}
+
+async function loadProductImage(productImage: string) {
+  if (productImage.startsWith("/")) {
+    const cleanPath = productImage.replace(/^\/+/, "");
+    const filePath = path.join(process.cwd(), "public", cleanPath);
+    return await fs.readFile(filePath);
+  }
+
+  const productRes = await fetch(productImage, {
+    headers: {
+      "User-Agent": "DogzeConnectTryOn/1.0",
+    },
+  });
+
+  if (!productRes.ok) {
+    throw new Error(
+      `Não consegui baixar a imagem do produto. Status: ${productRes.status}`
+    );
+  }
+
+  return Buffer.from(await productRes.arrayBuffer());
 }
 
 export async function POST(req: Request) {
@@ -33,31 +57,9 @@ export async function POST(req: Request) {
     }
 
     const petBuffer = base64ToBuffer(image);
+    const productBuffer = await loadProductImage(productImage);
 
-  const origin = new URL(req.url).origin;
-
-const productImageUrl = productImage.startsWith("http")
-  ? productImage
-  : `${origin}${productImage}`;
-
-const productRes = await fetch(productImageUrl, {
-  headers: {
-    "User-Agent": "DogzeConnectTryOn/1.0",
-  },
-});
-
-    if (!productRes.ok) {
-      return NextResponse.json(
-        {
-          error: `Não consegui baixar a imagem do produto. Status: ${productRes.status}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const productBuffer = Buffer.from(await productRes.arrayBuffer());
-
-    const petMeta = await sharp(petBuffer).metadata();
+    const petMeta = await sharp(petBuffer).rotate().metadata();
 
     if (!petMeta.width || !petMeta.height) {
       return NextResponse.json(
@@ -75,15 +77,6 @@ const productRes = await fetch(productImageUrl, {
       .resize({ width: harnessWidth })
       .png()
       .toBuffer();
-
-    const harnessMeta = await sharp(harness).metadata();
-
-    if (!harnessMeta.width || !harnessMeta.height) {
-      return NextResponse.json(
-        { error: "Não consegui preparar a imagem da coleira." },
-        { status: 400 }
-      );
-    }
 
     const left = Math.round(petWidth * 0.48);
     const top = Math.round(petHeight * 0.38);
