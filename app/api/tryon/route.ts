@@ -11,32 +11,37 @@ type TryOnTemplate = {
   leftRatio: number;
   topRatio: number;
   rotation: number;
+  skewX: number;
 };
 
 const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
   peitoral: {
-    widthRatio: 0.28, // 🔥 maior
-    leftRatio: 0.50,  // 🔥 mais centralizado
-    topRatio: 0.48,   // 🔥 mais baixo (peito)
-    rotation: 6,
+    widthRatio: 0.30,
+    leftRatio: 0.52,
+    topRatio: 0.50,
+    rotation: 18,     // 🔥 inclina mais
+    skewX: 0.25,      // 🔥 simula corpo
   },
   coleira: {
     widthRatio: 0.18,
     leftRatio: 0.50,
     topRatio: 0.30,
     rotation: 0,
+    skewX: 0,
   },
   guia: {
     widthRatio: 0.30,
     leftRatio: 0.40,
     topRatio: 0.50,
     rotation: -8,
+    skewX: 0,
   },
   combo: {
     widthRatio: 0.25,
     leftRatio: 0.45,
     topRatio: 0.45,
-    rotation: 2,
+    rotation: 10,
+    skewX: 0.1,
   },
 };
 
@@ -47,10 +52,7 @@ function base64ToBuffer(dataUrl: string) {
 }
 
 function getTemplate(productType?: ProductType) {
-  if (productType && TYPE_TEMPLATES[productType]) {
-    return TYPE_TEMPLATES[productType];
-  }
-  return TYPE_TEMPLATES.peitoral;
+  return TYPE_TEMPLATES[productType || "peitoral"];
 }
 
 async function loadImage(url: string) {
@@ -107,7 +109,7 @@ export async function POST(req: Request) {
 
     const cleaned = await removeBackground(productBuffer);
 
-    const resized = await sharp(cleaned)
+    let harness = await sharp(cleaned)
       .resize({ width: Math.round(petMeta.width * template.widthRatio) })
       .rotate(template.rotation, {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -115,13 +117,26 @@ export async function POST(req: Request) {
       .png()
       .toBuffer();
 
-    const left = Math.round(petMeta.width * template.leftRatio - resized.length * 0.0005);
+    // 🔥 SIMULA CURVATURA (leve achatamento lateral)
+    const meta = await sharp(harness).metadata();
+
+    if (meta.width && meta.height) {
+      harness = await sharp(harness)
+        .resize({
+          width: Math.round(meta.width * (1 - template.skewX)),
+          height: meta.height,
+        })
+        .png()
+        .toBuffer();
+    }
+
+    const left = Math.round(petMeta.width * template.leftRatio);
     const top = Math.round(petMeta.height * template.topRatio);
 
     const final = await sharp(petBuffer)
       .composite([
         {
-          input: resized,
+          input: harness,
           left,
           top,
         },
@@ -135,7 +150,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error(err);
     return NextResponse.json(
-      { error: "Erro composição V2.3.3" },
+      { error: "Erro composição V2.4" },
       { status: 500 }
     );
   }
