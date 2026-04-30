@@ -11,19 +11,6 @@ type TryOnTemplate = {
   leftRatio: number;
   topRatio: number;
   rotation: number;
-  whiteThreshold: number;
-  shadow: boolean;
-};
-
-const PRODUCT_TEMPLATES: Record<string, TryOnTemplate> = {
-  "easy-walk-melancia": {
-    widthRatio: 0.18,
-    leftRatio: 0.44,
-    topRatio: 0.43,
-    rotation: 4,
-    whiteThreshold: 200,
-    shadow: true,
-  },
 };
 
 const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
@@ -32,75 +19,50 @@ const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
     leftRatio: 0.44,
     topRatio: 0.43,
     rotation: 4,
-    whiteThreshold: 200,
-    shadow: true,
   },
   coleira: {
     widthRatio: 0.16,
     leftRatio: 0.48,
     topRatio: 0.34,
     rotation: 0,
-    whiteThreshold: 200,
-    shadow: true,
   },
   guia: {
     widthRatio: 0.26,
     leftRatio: 0.34,
     topRatio: 0.42,
     rotation: -8,
-    whiteThreshold: 200,
-    shadow: true,
   },
   combo: {
     widthRatio: 0.2,
     leftRatio: 0.42,
     topRatio: 0.42,
     rotation: 2,
-    whiteThreshold: 200,
-    shadow: true,
   },
 };
 
 function base64ToBuffer(dataUrl: string) {
   const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-
-  if (!match) {
-    throw new Error("Imagem do pet inválida.");
-  }
-
+  if (!match) throw new Error("Imagem inválida");
   return Buffer.from(match[1], "base64");
 }
 
-function getTemplate(productId?: string, productType?: ProductType) {
-  if (productId && PRODUCT_TEMPLATES[productId]) {
-    return PRODUCT_TEMPLATES[productId];
-  }
-
+function getTemplate(productType?: ProductType) {
   if (productType && TYPE_TEMPLATES[productType]) {
     return TYPE_TEMPLATES[productType];
   }
-
   return TYPE_TEMPLATES.peitoral;
 }
 
-async function loadImageFromUrl(url: string) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "DogzeConnectTryOn/1.0",
-    },
-  });
-
+async function loadImage(url: string) {
+  const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(
-      `Não consegui baixar a imagem do produto. Status: ${res.status}`
-    );
+    throw new Error(`Erro ao baixar produto: ${res.status}`);
   }
-
   return Buffer.from(await res.arrayBuffer());
 }
 
-// 🔥 FUNÇÃO CORRIGIDA (remove fundo branco + cinza)
-async function removeWhiteBackground(buffer: Buffer, threshold: number) {
+// 🔥 REMOVE FUNDO SEM CRIAR PRETO
+async function removeBackground(buffer: Buffer) {
   const { data, info } = await sharp(buffer)
     .ensureAlpha()
     .raw()
@@ -115,13 +77,8 @@ async function removeWhiteBackground(buffer: Buffer, threshold: number) {
 
     const brightness = (r + g + b) / 3;
 
-    const isBackground =
-      brightness > threshold ||
-      (r > 200 && g > 200 && b > 200) ||
-      (Math.abs(r - g) < 10 && Math.abs(r - b) < 10 && brightness > 180);
-
-    if (isBackground) {
-      pixels[i + 3] = 0;
+    if (brightness > 235) {
+      pixels[i + 3] = 0; // transparente
     }
   }
 
@@ -132,128 +89,41 @@ async function removeWhiteBackground(buffer: Buffer, threshold: number) {
       channels: info.channels,
     },
   })
-    .trim()
-    .png()
-    .toBuffer();
-}
-
-async function addSoftShadow(buffer: Buffer) {
-  const meta = await sharp(buffer).metadata();
-
-  if (!meta.width || !meta.height) {
-    return buffer;
-  }
-
-  const shadow = await sharp(buffer)
-    .extractChannel("alpha")
-    .blur(8)
-    .linear(0.35)
-    .toColourspace("b-w")
-    .joinChannel(
-      Buffer.alloc(meta.width * meta.height * 3, 0),
-      {
-        raw: {
-          width: meta.width,
-          height: meta.height,
-          channels: 3,
-        },
-      }
-    )
-    .png()
-    .toBuffer()
-    .catch(() => null);
-
-  if (!shadow) return buffer;
-
-  const canvasWidth = meta.width + 24;
-  const canvasHeight = meta.height + 24;
-
-  return sharp({
-    create: {
-      width: canvasWidth,
-      height: canvasHeight,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
-  })
-    .composite([
-      {
-        input: shadow,
-        left: 14,
-        top: 14,
-      },
-      {
-        input: buffer,
-        left: 8,
-        top: 8,
-      },
-    ])
     .png()
     .toBuffer();
 }
 
 export async function POST(req: Request) {
   try {
-    const { image, productImage, productId, productType } = await req.json();
-
-    if (!image) {
-      return NextResponse.json(
-        { error: "Imagem do pet ausente." },
-        { status: 400 }
-      );
-    }
-
-    if (!productImage) {
-      return NextResponse.json(
-        { error: "Imagem do produto ausente." },
-        { status: 400 }
-      );
-    }
-
-    const template = getTemplate(productId, productType);
+    const { image, productImage, productType } = await req.json();
 
     const petBuffer = base64ToBuffer(image);
-    const productBuffer = await loadImageFromUrl(productImage);
+    const productBuffer = await loadImage(productImage);
 
-    const petMeta = await sharp(petBuffer).rotate().metadata();
-
+    const petMeta = await sharp(petBuffer).metadata();
     if (!petMeta.width || !petMeta.height) {
-      return NextResponse.json(
-        { error: "Não consegui ler a foto do pet." },
-        { status: 400 }
-      );
+      throw new Error("Erro dimensões pet");
     }
 
-    const petWidth = petMeta.width;
-    const petHeight = petMeta.height;
+    const template = getTemplate(productType);
 
-    const productTransparent = await removeWhiteBackground(
-      productBuffer,
-      template.whiteThreshold
-    );
+    const cleanedProduct = await removeBackground(productBuffer);
 
-    const targetWidth = Math.round(petWidth * template.widthRatio);
-
-    let harness = await sharp(productTransparent)
-      .resize({ width: targetWidth })
+    const resized = await sharp(cleanedProduct)
+      .resize({ width: Math.round(petMeta.width * template.widthRatio) })
       .rotate(template.rotation, {
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
       .png()
       .toBuffer();
 
-    if (template.shadow) {
-      harness = await addSoftShadow(harness);
-    }
+    const left = Math.round(petMeta.width * template.leftRatio);
+    const top = Math.round(petMeta.height * template.topRatio);
 
-    const left = Math.round(petWidth * template.leftRatio);
-    const top = Math.round(petHeight * template.topRatio);
-
-    const finalImage = await sharp(petBuffer)
-      .rotate()
+    const final = await sharp(petBuffer)
       .composite([
         {
-          input: harness,
+          input: resized,
           left,
           top,
         },
@@ -262,18 +132,13 @@ export async function POST(req: Request) {
       .toBuffer();
 
     return NextResponse.json({
-      imageUrl: `data:image/png;base64,${finalImage.toString("base64")}`,
+      imageUrl: `data:image/png;base64,${final.toString("base64")}`,
     });
-  } catch (error) {
-    console.error("ERRO TRYON V2.3:", error);
+  } catch (err) {
+    console.error(err);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Erro composição V2.3",
-      },
+      { error: "Erro composição V2.3.2" },
       { status: 500 }
     );
   }
