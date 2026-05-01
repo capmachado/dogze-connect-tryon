@@ -16,47 +16,46 @@ type HarnessPart = {
 };
 
 const EASY_WALK_PARTS: HarnessPart[] = [
+  // 🟢 COSTAS (primeiro - fundo)
   {
     file: "back-top.png",
-    widthRatio: 0.13,
-    leftRatio: 0.57,
-    topRatio: 0.35,
-    rotation: 22,
-    opacity: 0.96,
+    widthRatio: 0.14,
+    leftRatio: 0.60,
+    topRatio: 0.32,
+    rotation: 25,
   },
+
+  // 🔵 LATERAL
   {
     file: "side-left.png",
-    widthRatio: 0.16,
+    widthRatio: 0.18,
     leftRatio: 0.52,
-    topRatio: 0.47,
-    rotation: -6,
-    opacity: 0.98,
+    topRatio: 0.48,
+    rotation: -10,
   },
+
+  // 🔴 PEITO
   {
     file: "front-chest.png",
-    widthRatio: 0.18,
-    leftRatio: 0.45,
-    topRatio: 0.45,
-    rotation: 4,
-    opacity: 1,
+    widthRatio: 0.20,
+    leftRatio: 0.42,
+    topRatio: 0.50,
+    rotation: 5,
   },
+
+  // ⚫ ARGOLA
   {
     file: "front-ring.png",
-    widthRatio: 0.045,
-    leftRatio: 0.47,
-    topRatio: 0.52,
+    widthRatio: 0.05,
+    leftRatio: 0.45,
+    topRatio: 0.58,
     rotation: 0,
-    opacity: 1,
   },
 ];
 
 function base64ToBuffer(dataUrl: string) {
   const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-
-  if (!match) {
-    throw new Error("Imagem do pet inválida.");
-  }
-
+  if (!match) throw new Error("Imagem inválida");
   return Buffer.from(match[1], "base64");
 }
 
@@ -117,22 +116,12 @@ export async function POST(req: Request) {
   try {
     const { image } = await req.json();
 
-    if (!image) {
-      return NextResponse.json(
-        { error: "Imagem do pet ausente." },
-        { status: 400 }
-      );
-    }
-
     const petBuffer = base64ToBuffer(image);
 
     const petMeta = await sharp(petBuffer).rotate().metadata();
 
     if (!petMeta.width || !petMeta.height) {
-      return NextResponse.json(
-        { error: "Não consegui ler a foto do pet." },
-        { status: 400 }
-      );
+      throw new Error("Erro dimensões pet");
     }
 
     const petWidth = petMeta.width;
@@ -167,15 +156,10 @@ export async function POST(req: Request) {
       imageUrl: `data:image/png;base64,${finalImage.toString("base64")}`,
     });
   } catch (error) {
-    console.error("ERRO TRYON V3 PARTS:", error);
+    console.error("ERRO TRYON V3.1:", error);
 
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Erro ao gerar provador V3 por partes.",
-      },
+      { error: "Erro composição V3.1" },
       { status: 500 }
     );
   }
