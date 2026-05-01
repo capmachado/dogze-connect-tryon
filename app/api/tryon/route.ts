@@ -1,156 +1,181 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import fs from "fs/promises";
+import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ProductType = "coleira" | "peitoral" | "guia" | "combo";
-
-type TryOnTemplate = {
+type HarnessPart = {
+  file: string;
   widthRatio: number;
   leftRatio: number;
   topRatio: number;
   rotation: number;
-  skewX: number;
+  opacity?: number;
 };
 
-const TYPE_TEMPLATES: Record<ProductType, TryOnTemplate> = {
-  peitoral: {
-    widthRatio: 0.30,
+const EASY_WALK_PARTS: HarnessPart[] = [
+  {
+    file: "back-top.png",
+    widthRatio: 0.13,
+    leftRatio: 0.57,
+    topRatio: 0.35,
+    rotation: 22,
+    opacity: 0.96,
+  },
+  {
+    file: "side-left.png",
+    widthRatio: 0.16,
     leftRatio: 0.52,
-    topRatio: 0.50,
-    rotation: 18,     // 🔥 inclina mais
-    skewX: 0.25,      // 🔥 simula corpo
+    topRatio: 0.47,
+    rotation: -6,
+    opacity: 0.98,
   },
-  coleira: {
+  {
+    file: "front-chest.png",
     widthRatio: 0.18,
-    leftRatio: 0.50,
-    topRatio: 0.30,
-    rotation: 0,
-    skewX: 0,
-  },
-  guia: {
-    widthRatio: 0.30,
-    leftRatio: 0.40,
-    topRatio: 0.50,
-    rotation: -8,
-    skewX: 0,
-  },
-  combo: {
-    widthRatio: 0.25,
     leftRatio: 0.45,
     topRatio: 0.45,
-    rotation: 10,
-    skewX: 0.1,
+    rotation: 4,
+    opacity: 1,
   },
-};
+  {
+    file: "front-ring.png",
+    widthRatio: 0.045,
+    leftRatio: 0.47,
+    topRatio: 0.52,
+    rotation: 0,
+    opacity: 1,
+  },
+];
 
 function base64ToBuffer(dataUrl: string) {
   const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
-  if (!match) throw new Error("Imagem inválida");
+
+  if (!match) {
+    throw new Error("Imagem do pet inválida.");
+  }
+
   return Buffer.from(match[1], "base64");
 }
 
-function getTemplate(productType?: ProductType) {
-  return TYPE_TEMPLATES[productType || "peitoral"];
+async function loadPart(fileName: string) {
+  const filePath = path.join(
+    process.cwd(),
+    "public",
+    "products",
+    "easy-walk-melancia",
+    "parts",
+    fileName
+  );
+
+  return fs.readFile(filePath);
 }
 
-async function loadImage(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Erro ao baixar produto");
-  return Buffer.from(await res.arrayBuffer());
-}
+async function preparePart(
+  buffer: Buffer,
+  targetWidth: number,
+  rotation: number,
+  opacity = 1
+) {
+  let img = sharp(buffer)
+    .resize({ width: targetWidth })
+    .rotate(rotation, {
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png();
 
-async function removeBackground(buffer: Buffer) {
-  const { data, info } = await sharp(buffer)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  if (opacity < 1) {
+    const prepared = await img.toBuffer();
+    const { data, info } = await sharp(prepared)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
 
-  const pixels = Buffer.from(data);
+    const pixels = Buffer.from(data);
 
-  for (let i = 0; i < pixels.length; i += info.channels) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-
-    const brightness = (r + g + b) / 3;
-
-    if (brightness > 235) {
-      pixels[i + 3] = 0;
+    for (let i = 0; i < pixels.length; i += info.channels) {
+      pixels[i + 3] = Math.round(pixels[i + 3] * opacity);
     }
+
+    return sharp(pixels, {
+      raw: {
+        width: info.width,
+        height: info.height,
+        channels: info.channels,
+      },
+    })
+      .png()
+      .toBuffer();
   }
 
-  return sharp(pixels, {
-    raw: {
-      width: info.width,
-      height: info.height,
-      channels: info.channels,
-    },
-  })
-    .trim()
-    .png()
-    .toBuffer();
+  return img.toBuffer();
 }
 
 export async function POST(req: Request) {
   try {
-    const { image, productImage, productType } = await req.json();
+    const { image } = await req.json();
+
+    if (!image) {
+      return NextResponse.json(
+        { error: "Imagem do pet ausente." },
+        { status: 400 }
+      );
+    }
 
     const petBuffer = base64ToBuffer(image);
-    const productBuffer = await loadImage(productImage);
 
-    const petMeta = await sharp(petBuffer).metadata();
+    const petMeta = await sharp(petBuffer).rotate().metadata();
+
     if (!petMeta.width || !petMeta.height) {
-      throw new Error("Erro dimensões pet");
+      return NextResponse.json(
+        { error: "Não consegui ler a foto do pet." },
+        { status: 400 }
+      );
     }
 
-    const template = getTemplate(productType);
+    const petWidth = petMeta.width;
+    const petHeight = petMeta.height;
 
-    const cleaned = await removeBackground(productBuffer);
+    const composites = [];
 
-    let harness = await sharp(cleaned)
-      .resize({ width: Math.round(petMeta.width * template.widthRatio) })
-      .rotate(template.rotation, {
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .png()
-      .toBuffer();
+    for (const part of EASY_WALK_PARTS) {
+      const partBuffer = await loadPart(part.file);
 
-    // 🔥 SIMULA CURVATURA (leve achatamento lateral)
-    const meta = await sharp(harness).metadata();
+      const prepared = await preparePart(
+        partBuffer,
+        Math.round(petWidth * part.widthRatio),
+        part.rotation,
+        part.opacity ?? 1
+      );
 
-    if (meta.width && meta.height) {
-      harness = await sharp(harness)
-        .resize({
-          width: Math.round(meta.width * (1 - template.skewX)),
-          height: meta.height,
-        })
-        .png()
-        .toBuffer();
+      composites.push({
+        input: prepared,
+        left: Math.round(petWidth * part.leftRatio),
+        top: Math.round(petHeight * part.topRatio),
+      });
     }
 
-    const left = Math.round(petMeta.width * template.leftRatio);
-    const top = Math.round(petMeta.height * template.topRatio);
-
-    const final = await sharp(petBuffer)
-      .composite([
-        {
-          input: harness,
-          left,
-          top,
-        },
-      ])
+    const finalImage = await sharp(petBuffer)
+      .rotate()
+      .composite(composites)
       .png()
       .toBuffer();
 
     return NextResponse.json({
-      imageUrl: `data:image/png;base64,${final.toString("base64")}`,
+      imageUrl: `data:image/png;base64,${finalImage.toString("base64")}`,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("ERRO TRYON V3 PARTS:", error);
+
     return NextResponse.json(
-      { error: "Erro composição V2.4" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao gerar provador V3 por partes.",
+      },
       { status: 500 }
     );
   }
